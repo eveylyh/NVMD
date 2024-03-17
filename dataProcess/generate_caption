@@ -1,0 +1,135 @@
+####twitter
+import pandas as pd
+import os
+import re
+import json
+from twitter_predict import ClipCaptionModel,get_device,generate2
+import clip
+import os
+from torch import nn
+import numpy as np
+import torch
+import torch.nn.functional as nnf
+import sys
+from typing import Tuple, List, Union, Optional
+from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
+from tqdm import tqdm, trange
+import skimage.io as io
+import PIL.Image
+from IPython.display import Image
+import matplotlib.pyplot as plt
+
+
+CPU = torch.device('cpu')
+CUDA = get_device
+
+current_directory = os.getcwd()
+model_path = 'E:\PycharmProjects\CLIP_prefix_caption-main\pretrained_models\model_weights.pt'
+is_gpu = True #@param {type:"boolean"}
+device = CUDA(0) if is_gpu else "cpu"
+clip_model, preprocess = clip.load("E:\PycharmProjects\CLIP_prefix_caption-main\pretrained_models\ViT-B-32.pt", device=device, jit=False)
+tokenizer = GPT2Tokenizer.from_pretrained("E:\PycharmProjects\CLIP_prefix_caption-main\gpt2")
+prefix_length = 10
+model = ClipCaptionModel(prefix_length)
+model.load_state_dict(torch.load(model_path))
+model = model.eval()
+device = CUDA(0) if is_gpu else "cpu"
+model = model.to(device)
+print('prepared')
+
+def picture(imagePath):
+    UPLOADED_FILE = imagePath
+    image = io.imread(UPLOADED_FILE)
+    pil_image = PIL.Image.fromarray(image)
+    # plt.imshow(image)
+    # plt.show()
+    image = preprocess(pil_image).unsqueeze(0).to(device)
+    with torch.no_grad():
+        prefix = clip_model.encode_image(image).to(device, dtype=torch.float32)
+        prefix_embed = model.clip_project(prefix).reshape(1, prefix_length, -1)
+        generated_text_prefix = generate2(model, tokenizer, embed=prefix_embed)
+    # print('\n')
+    # print(generated_text_prefix)
+    return generated_text_prefix
+
+csvfile = open('mediaeval2015/tweets.csv',encoding='utf-8')
+df = pd.read_csv('mediaeval2015/tweets.csv',sep='\t')
+path = r'E:/PycharmProjects/CLIP_prefix_caption-main/dataprocess/tra-in_dataset'
+def getevent(event):
+    if event == 'sandyA'or event == 'sandyB':
+        return 'Hurricane Sandy'
+    elif event =='boston':
+        return 'BostonMarathon'
+    elif event =='bringback':
+        return 'Bring Back Our Girls'
+    elif event =='columbianChemicals':
+        return 'Columbian Chemicals'
+    elif event == 'livr':
+        return 'Livr'
+    elif event == 'malaysia':
+        return 'Malaysia Airlines'
+    elif event =='passport':
+        return 'Passport'
+    elif event =='pigFish':
+        return 'Pig Fish'
+    elif event =='elephant':
+        return 'Rock Elephant'
+    elif event=='sochi':
+        return 'Sochi Olympics'
+    elif event=='underwater':
+        return 'Underwater bedroom'
+def tweetTextClean(tweetText):
+    results = re.compile(r'[http|https]*://[a-zA-Z0-9.?/&=:]*', re.S)
+    tweetText = re.sub(results, '', tweetText)
+    tweetText = re.sub(r"(//)?\s*@\S*?\s*(:| |$)", "", tweetText)
+    # tweetText = re.sub(u'['u'\U0001F300-\U0001F64F' u'\U0001F680-\U0001F6FF'u'\u2600-\u2B55]+', "", tweetText)  # 去除表情符号
+    return tweetText
+for i in range(0,len(df)):
+    label=df["label"][i]
+    if label!='humor':
+        # print(label)
+        # tweetId = str(df["tweetId"][i])
+        # print(tweetId)
+        # os.mkdir(path + './' + label + './' + tweetId)
+        # json_path = path + './' + label + './' + tweetId + './' + 'content.json'
+        # tweetText = df["tweetText"][i]
+        # print(tweetText)
+        # print(tweetText)
+        # print(tweetText)
+        image = df["imageId(s)"][i]
+        # print(image)
+        imageId = image.split('_')
+        event = imageId[0]
+        # print('here',event)
+        event = getevent(event)
+        # print('here1',event)
+        if event != 'Hurricane Sandy':
+            tweetId = str(df["tweetId"][i])
+            dirs=path + './' + label + './' + tweetId
+            if not os.path.exists(dirs):
+                tweetText = df["tweetText"][i]
+                json_path = path + './' + label + './' + tweetId + './' + 'content.json'
+                print(label)
+                print(tweetId)
+                tweetText = tweetTextClean(tweetText)
+                os.mkdir(path + './' + label + './' + tweetId)
+                la = imageId[1]
+                #print("la",la)
+                if la == 'fake':
+                    imagePath = 'E:/PycharmProjects/CLIP_prefix_caption-main/dataprocess/mediaeval2015/Medieval2015_DevSet_Images' + '/' + event + '/fakes' + '/' + image + '.jpg'
+                else:
+                    imagePath = 'E:/PycharmProjects/CLIP_prefix_caption-main/dataprocess/mediaeval2015/Medieval2015_DevSet_Images' + '/' + event + '/reals' + '/' + image + '.jpg'
+                if event == 'Passport'or event=='Livr'or event =='Pig Fish':
+                    imagePath = 'E:/PycharmProjects/CLIP_prefix_caption-main/dataprocess/mediaeval2015/Medieval2015_DevSet_Images' + '/' + event + '/fakes' + '/' + image + '.jpg'
+                if event =='Malaysia Airlines':
+                    imagePath = 'E:/PycharmProjects/CLIP_prefix_caption-main/dataprocess/mediaeval2015/Medieval2015_DevSet_Images' + '/' + event  +'/'+ image + '.jpg'
+                picturetext = picture(imagePath)
+                dict = {'text': tweetText, 'picture': picturetext}
+                json_str = json.dumps(dict)
+                print(json_str)
+                with open(json_path, "w") as f:
+                    json.dump(dict, f)
+                print('第 %d 条数据已完成 ' % (i))
+
+
+
