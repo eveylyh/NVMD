@@ -1,2 +1,2 @@
-# PMMC
-PMMC: Prompt-based Multi-Modal Rumor Detection Model with Modality Conversion
+# NVMD
+NVMD: Multimodal Rumor Detection Integrating Narrative and Visual Features
